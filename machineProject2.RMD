@@ -1,0 +1,119 @@
+##PRACTICAL MACHINE LEARNING COURSE PROJECT
+
+In this supervised learning  project we were given (almost indecipherable) data about the way a group of subjects performed specific weightlifting exercises. All subjects were then assigned to one of five output classsifications (A,B,C,D,E) depending on how true to form they performed the exercises with A being the best outcome. We were then given test data on 20 subjects that included all information except their ultimate classification. Our objective: apply the machine learning algorithm(s) of our choice to (correctly) classify these 20 subjects.
+
+###MODEL SELECTION
+
+The true staring place for machine learning is feature selection (see below) so this should be discussed at the end but I'm discussing it now. I tried several different algorithms such as random-forest and got poor results. As soon as I tried SVM (support  vector machine)results improved dramatically so that is the only alogrithm used in this paper.
+
+
+### Load relevant libraries and read in data
+
+```{r,message=FALSE, warning=FALSE}
+
+library(e1071)
+library(caret)
+training<-read.csv("pml-training.csv")
+testing<-read.csv("pml-testing.csv")
+```
+
+###FEATURE SELECTION
+
+Feature selection is often the most critical part of any machine learning project -- feature selection falls into two primary classes:
+
++ Filter methods
++ Wrapper methods
+
+You can check online to learn the definitions/differences between these two methods -- note that all feature selection done in this paper is based on filtering methods -- a method that "relies solely on the properties of the data, thus is independent of any particular algorithm"
+
+
+
+#### Remove NA features
+
+the data for 67 of the 160 features was almost 100% NAs -- remove these features
+```{r}
+
+training<-training[,!apply(is.na(training), 2, any)] # remove columns that contain any NAs
+```
+   
+#### Remove linear dependencies
+
+the function findLinearCombos does this for us -- it  only operates on a numeric matrix so create one
+
+```{r}
+data2<-data.matrix(training) # create temporary data matrix   
+
+comboInfo <- findLinearCombos(data2)  # < find features which form linear combinations and remove them
+```
+
+```{r,results="hide"}
+
+
+comboInfo  # < -- will identify columns for deletion
+
+d=c(14,17,19,54,57,76,79,81) # columns idedtified
+
+training<-training[-d] # delete columns
+```
+
+#### Remove Zero- and Near Zero-Variance Predictors
+
+```{r}
+zerotrain<-nearZeroVar(training) #<--- identify zero-variance predictors
+training<-training[-zerotrain] # <--delete these features
+```
+
+#### Remove highly correlated features
+```{r}
+tCor<-cor(training[sapply(training, is.numeric)]) #<--create a correlation matrix
+highlyCor <- findCorrelation(tCor, cutoff = 0.75) #<-- identify factors with correlation >= to .75
+training <- training[, -highlyCor] #<-- remove these features
+```
+#### Remove clearly unimportant feature
+
+Visual inspection often works in feature selection even though it is not the most scientific of methods
+```{r}
+training<-training[-c(1,2,3,4,5)] #<-- visual inspection tells you to remove these features
+
+```
+
+#### Align traing and test features
+
+In SVM, training and test sets much have the same features -- here I have used the 32 of the 33 features remaining (classe is the excluded feature here)  to select a subset of testing features
+```{r}
+
+namex<-names(training) #<--create a character vector with names of features left in training set
+
+testing<-testing[,namex[1:32]] #<---will leave testing set with same features as training set
+```
+
+#### Boilerplate
+```{r}
+trainindex<-createDataPartition(training$classe,times=1,list=FALSE,p=.6) #  assign 60% to training set
+
+training<-training[trainindex,]
+validation<-training[-trainindex,]
+```
+#### Apply SVM
+
+I use defaults here except for gamma
+```{r}
+modelSvm <- svm(classe  ~ ., data = training,gamma=.3) #<---apply svm with gamma=.3
+```
+
+#### Use predcition function on validation set and print results of confusionMatrix
+```{r,}
+preSvm<-predict(modelSvm,validation) #<-- apply modelSvm to validation set
+
+confusionMatrix(preSvm,validation$classe) # 
+```
+
+
+#### Use prediction function on testing set and print results
+
+```{r}
+preSvm<-predict(modelSvm,testing)
+
+preSvm
+```
+
